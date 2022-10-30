@@ -1,4 +1,4 @@
-import { Button, Col, Menu, Row } from "antd";
+import { Button, Card, Col, List, Menu, Row, Space } from "antd";
 import "antd/dist/antd.css";
 import {
   useBalance,
@@ -14,7 +14,10 @@ import { Link, Route, Switch, useLocation } from "react-router-dom";
 import "./App.css";
 import {
   Account,
+  AddressInput,
+  BytesStringInput,
   Contract,
+  EtherInput,
   Faucet,
   GasGauge,
   Header,
@@ -31,6 +34,7 @@ import deployedContracts from "./contracts/hardhat_contracts.json";
 import { Transactor, Web3ModalSetup } from "./helpers";
 import { Home, ExampleUI, Hints, Subgraph } from "./views";
 import { useStaticJsonRPC } from "./hooks";
+import { useEventListener } from "eth-hooks/events/useEventListener";
 
 const { ethers } = require("ethers");
 /*
@@ -73,7 +77,7 @@ const providers = [
 function App(props) {
   // specify all the chains your app is available on. Eg: ['localhost', 'mainnet', ...otherNetworks ]
   // reference './constants.js' for other networks
-  const networkOptions = [initialNetwork.name, "mainnet", "goerli"];
+  const networkOptions = [initialNetwork.name, "localhost", "mainnet", "goerli"];
 
   const [injectedProvider, setInjectedProvider] = useState();
   const [address, setAddress] = useState();
@@ -169,6 +173,9 @@ function App(props) {
   // keep track of a variable from the contract in the local React state:
   const purpose = useContractReader(readContracts, "YourContract", "purpose");
 
+  const submitEvents = useEventListener(readContracts, "MultiSig", "Submit", localProvider, 1);
+
+  const approveEvents = useEventListener(readContracts, "MultiSig", "Approve", localProvider, 1);
   /*
   const addressFromENS = useResolveName(mainnetProvider, "austingriffith.eth");
   console.log("🏷 Resolved austingriffith.eth as:",addressFromENS)
@@ -311,6 +318,56 @@ function App(props) {
         <Route exact path="/">
           {/* pass in any web3 props to this Home component. For example, yourLocalBalance */}
           <Home yourLocalBalance={yourLocalBalance} readContracts={readContracts} />
+          <div style={{ padding: 32 }}>
+            <Row gutter={16}>
+              <Col span={8}>
+                <Card title="Submit a Transaction">
+                  <div
+                    style={{
+                      padding: 8,
+                      margin: "auto",
+                      justifyContent: "center",
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
+                    <h4>Propose a transaction, your accomplices will need to approve it.</h4>
+                    <div style={{ padding: 8 }}>
+                      <AddressInput />
+                      <EtherInput />
+                      <BytesStringInput />
+                    </div>
+                    <div style={{ padding: 8 }}>
+                      <Button
+                        type={"primary"}
+                        size={"large"}
+                        onClick={async () => {
+                          try {
+                            const txCur = await tx(writeContracts.MultiSig.submit({ value: 1, gasLimit: 300000 }));
+                            await txCur.wait();
+                          } catch (e) {
+                            console.log("mint failed", e);
+                          }
+                        }}
+                      >
+                        PROPOSE
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              </Col>
+              <Col span={16}>
+                <Card title="Proposed Transactions">
+                  <List
+                    dataSource={submitEvents}
+                    renderItem={item => {
+                      return <List.Item key={item.blockNumber}></List.Item>;
+                    }}
+                  />
+                </Card>
+              </Col>
+            </Row>
+          </div>
         </Route>
         <Route exact path="/debug">
           {/*
@@ -320,7 +377,7 @@ function App(props) {
             */}
 
           <Contract
-            name="YourContract"
+            name="MultiSig"
             price={price}
             signer={userSigner}
             provider={localProvider}
